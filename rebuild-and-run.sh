@@ -55,7 +55,7 @@ sleep 2
 echo ""
 echo "View logs:"
 echo "  tail -f /tmp/metalsqlite-server.log"
-echo "  log stream --predicate 'process == \"MetalSQLite\"' --level debug"
+echo "  tail -f /tmp/metalsqlite-app.log"
 echo ""
 echo "To stop:"
 echo "  pkill -f metalsqlite-server"

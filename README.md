@@ -62,7 +62,7 @@ The app loads `/Users/darianhickman/Documents/Index.sqlite` by default, querying
 ## Troubleshooting
 
 - Check server logs: `tail -f /tmp/metalsqlite-server.log`
-- Check app logs: `log stream --predicate 'process == "MetalSQLite"' --level debug`
+- Check app logs: `tail -f /tmp/metalsqlite-app.log`
 - Verify processes: `ps aux | grep -E 'metalsqlite|MetalSQLite'`
 - Test server: `curl -X POST http://[::1]:<PORT>/query -H "Content-Type: application/json" -d '{"banquet_url":"..."}'`
 

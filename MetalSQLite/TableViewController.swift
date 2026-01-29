@@ -204,22 +204,7 @@ class TableViewController: NSViewController {
     }
     
     func logToSharedFile(_ message: String) {
-        let logPath = "/tmp/metalsqlite-server.log"
-        let logMessage = "[UI] \(message)\n"
-        print(logMessage, terminator: "")
-        
-        // Use standard Swift FileHandle but with explicit flushing
-        if let data = logMessage.data(using: .utf8) {
-            if let fileHandle = FileHandle(forWritingAtPath: logPath) {
-                fileHandle.seekToEndOfFile()
-                fileHandle.write(data)
-                try? fileHandle.synchronize()
-                fileHandle.closeFile()
-            } else {
-                // If it doesn't exist or we can't open for writing, try creating it
-                try? logMessage.appendLineToURL(fileURL: URL(fileURLWithPath: logPath))
-            }
-        }
+        print("[UI] \(message)")
     }
     
     func updateMenuWithQueryInfo(banquetURL: String, response: QueryResponse) {
@@ -502,17 +487,3 @@ extension NSToolbarItem.Identifier {
     static let queryButton = NSToolbarItem.Identifier("QueryButton")
 }
 
-extension String {
-    func appendLineToURL(fileURL: URL) throws {
-        let line = self + "\n"
-        guard let data = line.data(using: .utf8) else { return }
-        
-        if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(data)
-            fileHandle.closeFile()
-        } else {
-            try data.write(to: fileURL, options: .atomic)
-        }
-    }
-}
