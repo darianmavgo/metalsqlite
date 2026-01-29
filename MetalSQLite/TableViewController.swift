@@ -44,8 +44,7 @@ class TableViewController: NSViewController {
     func setupUI() {
         // Status label at bottom
         statusLabel = NSTextField(labelWithString: "Ready")
-        statusLabel.frame = NSRect(x: 20, y: 10, width: Int(view.bounds.width) - 40, height: 20)
-        statusLabel.autoresizingMask = [.width]
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.isEditable = false
         statusLabel.isBordered = false
         statusLabel.backgroundColor = .clear
@@ -54,8 +53,8 @@ class TableViewController: NSViewController {
         view.addSubview(statusLabel)
         
         // Table view fills entire space (toolbar will be outside this view)
-        scrollView = NSScrollView(frame: NSRect(x: 0, y: 40, width: Int(view.bounds.width), height: Int(view.bounds.height) - 40))
-        scrollView.autoresizingMask = [.width, .height]
+        scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.borderType = .noBorder
@@ -69,6 +68,18 @@ class TableViewController: NSViewController {
         
         scrollView.documentView = tableView
         view.addSubview(scrollView)
+
+        NSLayoutConstraint.activate([
+            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            statusLabel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -10),
+            statusLabel.heightAnchor.constraint(equalToConstant: 20),
+
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: statusLabel.topAnchor, constant: -5)
+        ])
     }
     
     func setupToolbar(for window: NSWindow) {
@@ -148,11 +159,11 @@ class TableViewController: NSViewController {
                     self.tableView.reloadData()
                     
                     // Size to fit
-                    self.tableView.tableColumns.forEach { $0.sizeToFit() }
+                    self.calculateAndSetColumnWidths()
                     
                     // Log results
                     let results = self.tableView.tableColumns.map { "\($0.title): \($0.width)" }.joined(separator: ", ")
-                    self.logToSharedFile("Widths after sizeToFit(): \(results)")
+                    self.logToSharedFile("Widths after calculateAndSetColumnWidths(): \(results)")
                     self.logToSharedFile("===========================")
                 } else {
                     self.tableView.reloadData()
@@ -203,6 +214,42 @@ class TableViewController: NSViewController {
         }
     }
     
+    func calculateAndSetColumnWidths() {
+        let padding: CGFloat = 20
+        let compactPadding: CGFloat = 6
+        let headerAttributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11)]
+        let cellAttributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13)]
+
+        for (columnIndex, column) in tableView.tableColumns.enumerated() {
+            let isCompact = ["is_dir", "id"].contains(column.identifier.rawValue)
+            let currentPadding = isCompact ? compactPadding : padding
+
+            // Header width
+            let headerWidth = (column.title as NSString).size(withAttributes: headerAttributes).width
+
+            // Max row width (sample first 50 rows)
+            var maxRowWidth: CGFloat = 0
+            let sampleCount = min(tableData.count, 50)
+
+            for rowIndex in 0..<sampleCount {
+                if columnIndex < tableData[rowIndex].count {
+                    let cellValue = "\(tableData[rowIndex][columnIndex])"
+                    let width = (cellValue as NSString).size(withAttributes: cellAttributes).width
+                    if width > maxRowWidth {
+                        maxRowWidth = width
+                    }
+                }
+            }
+
+            let requiredWidth = max(headerWidth, maxRowWidth) + currentPadding
+            column.width = requiredWidth
+
+            if isCompact {
+                column.minWidth = 20
+            }
+        }
+    }
+
     func logToSharedFile(_ message: String) {
         print("[UI] \(message)")
     }
@@ -244,6 +291,7 @@ class TableViewController: NSViewController {
         DispatchQueue.main.async {
             if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
                 appDelegate.updateQueryInfoMenu(
+                    menuTitle: banquetURL,
                     datasetPath: datasetPath,
                     table: table,
                     columns: columnNames,
@@ -374,7 +422,15 @@ struct AnyCodable: Codable {
 }
 
 // MARK: - Toolbar Delegate
-extension TableViewController: NSToolbarDelegate {
+extension TableViewController: NSToolbarDelegate, NSSearchFieldDelegate {
+    func controlTextDidChange(_ obj: Notification) {
+        guard let field = obj.object as? NSTextField, field === urlBar else { return }
+
+        if field.stringValue.hasSuffix("/") {
+            executeQuery()
+        }
+    }
+
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         
         if itemIdentifier == .urlSearch {
@@ -386,6 +442,7 @@ extension TableViewController: NSToolbarDelegate {
             searchField.placeholderString = "Index.sqlite/tb0?limit=100"
             searchField.target = self
             searchField.action = #selector(executeQuery)
+            searchField.delegate = self
             
             // Set 3x larger width (taking into account the screen width)
             // Instead of flexible, we set a large preferred width

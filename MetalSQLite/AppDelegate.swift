@@ -105,10 +105,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    func updateQueryInfoMenu(datasetPath: String, table: String, columns: [String], limit: String?, total: Int) {
+    func updateQueryInfoMenu(menuTitle: String, datasetPath: String, table: String, columns: [String], limit: String?, total: Int) {
         // Update menu title to show current database/table
-        let dbName = (datasetPath as NSString).lastPathComponent
-        queryInfoMenuItem.title = "\(dbName)/\(table)"
+        queryInfoMenuItem.title = menuTitle
         
         // Clear existing items
         queryInfoMenuItem.submenu?.removeAllItems()
