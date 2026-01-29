@@ -1,0 +1,32 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		{fileRef} = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		{fileRef2} = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableViewController.swift; sourceTree = "<group>"; };
+		{fileRef3} = {isa = PBXFileReference; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
+		{productRef} = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MetalSQLite.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		{groupRef} = {
+			isa = PBXGroup;
+			children = (
+{fileRef},
+{fileRef2},
+{baseRef},
+);
+			path = MetalSQLite;
+			sourceTree = "<group>";
+		};
+		{baseRef} = {
+			isa = PBXGroup;
+			children = (
+{fileRef3},
+);
+			path = Base.lproj;
+			sourceTree = "<group>";
+		};
+	};
+	rootObject = {projectRef};
+}
