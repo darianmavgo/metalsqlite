@@ -59,6 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     var queryInfoMenuItem: NSMenuItem!
+    var progressMenuItem: NSMenuItem!
     
     func setupApplicationMenu() {
         let mainMenu = NSMenu()
@@ -78,6 +79,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         appMenu.addItem(quitMenuItem)
         
+        // Row Progress menu (dynamic)
+        progressMenuItem = NSMenuItem()
+        progressMenuItem.title = "Rows: 0"
+        mainMenu.addItem(progressMenuItem)
+        
         // Query Info menu (dynamic)
         queryInfoMenuItem = NSMenuItem()
         queryInfoMenuItem.title = "No Query"
@@ -91,6 +97,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Set the main menu
         NSApplication.shared.mainMenu = mainMenu
+    }
+    
+    func updateProgressMenu(rowsLoaded: Int) {
+        DispatchQueue.main.async {
+            self.progressMenuItem.title = "Rows: \(rowsLoaded)"
+        }
     }
     
     func updateQueryInfoMenu(datasetPath: String, table: String, columns: [String], limit: String?, total: Int) {

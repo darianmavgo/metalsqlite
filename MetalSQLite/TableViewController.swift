@@ -19,6 +19,7 @@ class TableViewController: NSViewController {
     var tableView: NSTableView!
     var scrollView: NSScrollView!
     var statusLabel: NSTextField!
+    var isFirstBatch = true
     
     struct ColumnInfo: Codable {
         let name: String
@@ -62,7 +63,7 @@ class TableViewController: NSViewController {
         tableView = NSTableView()
         tableView.headerView = NSTableHeaderView()
         tableView.usesAlternatingRowBackgroundColors = true
-        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        tableView.columnAutoresizingStyle = .noColumnAutoresizing  // Disable auto-resizing to maintain calculated widths
         tableView.dataSource = self
         tableView.delegate = self
         
@@ -97,6 +98,7 @@ class TableViewController: NSViewController {
     var streamingProvider: StreamingProvider?
     
     func executeQueryWithURL(_ banquetURL: String) {
+        logToSharedFile("Starting query: \(banquetURL)")
         statusLabel.stringValue = "Executing query (streaming)..."
         
         guard let url = URL(string: "\(serverURL)/query") else {
@@ -107,6 +109,7 @@ class TableViewController: NSViewController {
         // Reset data
         tableData = []
         columns = []
+        isFirstBatch = true
         tableView.reloadData()
         
         var request = URLRequest(url: url)
@@ -120,9 +123,11 @@ class TableViewController: NSViewController {
         streamingProvider = StreamingProvider()
         streamingProvider?.onHeaderReceived = { [weak self] columns, total in
             DispatchQueue.main.async {
-                self?.columns = columns
-                self?.updateTableColumns()
-                self?.statusLabel.stringValue = "Streaming... (Total: \(total))"
+                guard let self = self else { return }
+                self.columns = columns
+                self.logToSharedFile("Header received: \(columns.count) columns, \(total) total rows expected")
+                self.updateTableColumns()
+                self.statusLabel.stringValue = "Streaming... (Total: \(total))"
             }
         }
         streamingProvider?.onRowsReceived = { [weak self] rows in
@@ -130,9 +135,36 @@ class TableViewController: NSViewController {
                 guard let self = self else { return }
                 self.tableData.append(contentsOf: rows)
                 
-                // Optimized update
-                self.tableView.reloadData()
-                self.statusLabel.stringValue = "Loaded \(self.tableData.count) rows..."
+                if self.isFirstBatch {
+                    self.isFirstBatch = false
+                    
+                    // Log first page info
+                    let columnNames = self.columns.map { $0.name }.joined(separator: ", ")
+                    self.logToSharedFile("=== First Page Received ===")
+                    self.logToSharedFile("Rows in page: \(rows.count)")
+                    self.logToSharedFile("Columns: [\(columnNames)]")
+                    
+                    // Update table data and reload to ensure cells exist for measurement
+                    self.tableView.reloadData()
+                    
+                    // Size to fit
+                    self.tableView.tableColumns.forEach { $0.sizeToFit() }
+                    
+                    // Log results
+                    let results = self.tableView.tableColumns.map { "\($0.title): \($0.width)" }.joined(separator: ", ")
+                    self.logToSharedFile("Widths after sizeToFit(): \(results)")
+                    self.logToSharedFile("===========================")
+                } else {
+                    self.tableView.reloadData()
+                }
+                
+                let rowsCount = self.tableData.count
+                self.statusLabel.stringValue = "Loaded \(rowsCount) rows..."
+                
+                // Update menu bar progress
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.updateProgressMenu(rowsLoaded: rowsCount)
+                }
             }
         }
         streamingProvider?.onComplete = { [weak self] total in
@@ -155,18 +187,38 @@ class TableViewController: NSViewController {
         let task = session.dataTask(with: request)
         task.resume()
     }
-    
     func updateTableColumns() {
         // Remove existing columns
         tableView.tableColumns.forEach { tableView.removeTableColumn($0) }
+        
+        let minColumnWidth = view.bounds.width * 0.01
         
         // Add new columns
         for columnInfo in columns {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(columnInfo.name))
             column.title = columnInfo.name
-            column.minWidth = 80
-            column.width = 150
+            column.minWidth = minColumnWidth
+            column.width = 150 // Initial width, will be updated by calculateAndSetColumnWidths
             tableView.addTableColumn(column)
+        }
+    }
+    
+    func logToSharedFile(_ message: String) {
+        let logPath = "/tmp/metalsqlite-server.log"
+        let logMessage = "[UI] \(message)\n"
+        print(logMessage, terminator: "")
+        
+        // Use standard Swift FileHandle but with explicit flushing
+        if let data = logMessage.data(using: .utf8) {
+            if let fileHandle = FileHandle(forWritingAtPath: logPath) {
+                fileHandle.seekToEndOfFile()
+                fileHandle.write(data)
+                try? fileHandle.synchronize()
+                fileHandle.closeFile()
+            } else {
+                // If it doesn't exist or we can't open for writing, try creating it
+                try? logMessage.appendLineToURL(fileURL: URL(fileURLWithPath: logPath))
+            }
         }
     }
     
@@ -341,16 +393,24 @@ extension TableViewController: NSToolbarDelegate {
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         
         if itemIdentifier == .urlSearch {
-            // Use NSSearchToolbarItem for automatic full-width expansion
-            let searchItem = NSSearchToolbarItem(itemIdentifier: itemIdentifier)
-            searchItem.searchField.placeholderString = "Index.sqlite/tb0?limit=100"
-            searchItem.searchField.target = self
-            searchItem.searchField.action = #selector(executeQuery)
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+            item.label = "" // Remove "Search" label that wraps
+            item.paletteLabel = "URL / Query"
             
-            // Store reference
-            urlBar = searchItem.searchField
+            let searchField = NSSearchField()
+            searchField.placeholderString = "Index.sqlite/tb0?limit=100"
+            searchField.target = self
+            searchField.action = #selector(executeQuery)
             
-            return searchItem
+            // Set 3x larger width (taking into account the screen width)
+            // Instead of flexible, we set a large preferred width
+            searchField.translatesAutoresizingMaskIntoConstraints = false
+            searchField.widthAnchor.constraint(equalToConstant: 800).isActive = true 
+            
+            item.view = searchField
+            urlBar = searchField
+            
+            return item
         }
         
         if itemIdentifier == .queryButton {
@@ -440,4 +500,19 @@ class StreamingProvider: NSObject, URLSessionDataDelegate {
 extension NSToolbarItem.Identifier {
     static let urlSearch = NSToolbarItem.Identifier("URLSearch")
     static let queryButton = NSToolbarItem.Identifier("QueryButton")
+}
+
+extension String {
+    func appendLineToURL(fileURL: URL) throws {
+        let line = self + "\n"
+        guard let data = line.data(using: .utf8) else { return }
+        
+        if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(data)
+            fileHandle.closeFile()
+        } else {
+            try data.write(to: fileURL, options: .atomic)
+        }
+    }
 }

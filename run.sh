@@ -9,7 +9,7 @@ if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
     PORT=8080
 else
     echo "Starting Go HTTP server..."
-    ./bin/metalsqlite-server > /tmp/metalsqlite-server.log 2>&1 &
+    ./bin/metalsqlite-server >> /tmp/metalsqlite-server.log 2>&1 &
     SERVER_PID=$!
     echo "✓ Server started (PID: $SERVER_PID)"
     echo "  Logs: /tmp/metalsqlite-server.log"
